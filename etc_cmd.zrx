@@ -1,0 +1,1237 @@
+PROMPT=">"
+line=""
+view_root="d:\Users\ckgoh\Perforce\ckgoh_FW2V0_MAIN\"
+fw_root="phy11g"
+fwdl_name="phy11g_ip_etc_flash.scr"
+
+
+
+ZocSend "^M"
+say "^M"
+
+do while 1
+a=ZocKeyboard("GETNEXTKEY")
+parse var a hexkey"|"scan"|"shift"|"ctrl"|"alt
+dd=x2c(hexkey)
+if hexkey=='03' then do
+	say "bye bye^M";
+	leave;
+end
+else if hexkey=='0D' then do
+	say "^M";
+	parse var line cmd " ";
+	select
+	    when cmd="clkdn" then do 
+		    tmp=etc_cli(REGSET,FA01,001F);
+		    tmp=etc_cli(REGSET,F880,0144);
+			tmp=etc_cli(REGSET,F890,2114);
+			tmp=etc_cli(REGSET,F880,0145);
+			tmp=etc_cli(REGSET,F709,3333);
+			tmp=etc_cli(REGSET,F719,3333);
+			tmp=etc_cli(REGSET,F729,3333);
+			tmp=etc_cli(REGSET,F739,3333);
+			tmp=etc_cli(REGSET,F749,3333);
+			tmp=etc_cli(REGSET,F101,0002);
+			tmp=etc_cli(REGSET,F844,0807);
+			-- tmp=etc_cli(REGSET,F840,4000);
+			ZocDelay 1
+			-- tmp=etc_cli(REGSET,F80C,0014);
+			-- tmp=etc_cli(REGSET,F810,8040);
+			-- tmp=etc_cli(REGSET,F80C,0015);
+			-- tmp=etc_cli(REGSET,F810,0480);
+			
+			tmp=etc_cli(REGSET,FA01,0000);
+			ZocDelay 2;
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MDIO_DATAREAD,0,1e); say tmp;
+			tmp=etc_cli(MDIO_DATAREAD,1,1e); say tmp;
+			tmp=etc_cli(MDIO_DATAREAD,2,1e); say tmp;
+			tmp=etc_cli(MDIO_DATAREAD,3,1e); say tmp;
+			tmp=etc_cli(MDIO_DATAREAD,4,1e); say tmp;
+			do phy = 0 to 4
+				tmp=etc_cli(MMD_DATAWRITE,phy,1f,1d2,10);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1f,1d3,10);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,0);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,13,0);
+			end
+			
+			do phy = 0 to 4
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+			end
+			
+			say 'config Switch Traffic Flow Table'
+			tmp=etc_cli(TFTBL,1,5,0002);
+			tmp=etc_cli(TFTBL,2,3,0020);
+			ZocDelay 5
+			do reg=4 to 7
+			    do phy=0 to 4
+					-- tmp=etc_cli(MMD_DATAWRITE,phy,1f,DB8,80);
+			        -- tmp=etc_cli(MMD_DATAWRITE,phy,1f,DBA,FC);
+					-- tmp=etc_cli(MMD_DATAWRITE,phy,1f,DBB,00);
+					-- tmp=etc_cli(MMD_DATAWRITE,phy,1f,DB9,reg);
+					-- tmp=etc_cli(MMD_DATAWRITE,phy,1f,DB8,81);
+				end
+			end
+			do phy=0 to 4
+				-- tmp=etc_cli(MMD_DATAWRITE,phy,1f,D8B,FF);
+			end
+			
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+	    when cmd="tftbl" then do 
+		    parse var line cmd " " RuleIndex " " portIn " " portOutMap " " rest
+			tmp=etc_cli(TFTBL,RuleIndex,portIn,portOutMap);
+		end
+		when cmd="statperf" then do
+			parse var line cmd " " phy " " rest
+			if phy="all" then do 
+				phy="0,1,2,3,4,5"
+			end
+			statlst="hdr,0,2,4,6";
+			statlstitem="PHY_MDIO,LC_COEF ,SNR     ,PPM     ,AGC     ";
+			do while length(statlst)>0
+				parse var statlst item "," statlst
+				parse var statlstitem item_hdr "," statlstitem
+				ln = item_hdr||"|";
+				phylst=phy;
+				do while length(phylst)>0
+					parse var phylst phy_addr "," phylst
+					select 
+						when item="hdr" then do
+						    dsp="A,B,C,D"
+							do while length(dsp)>0
+								parse var dsp dsp_addr "," dsp
+								ln=ln||phy_addr||":ASP-"||dsp_addr||"|"
+							end
+						end
+						otherwise do
+						    dsp="0,1,2,3"
+							do while length(dsp)>0
+							    parse var dsp dsp_addr "," dsp 
+								tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+								tmp1=etc_cli(MMD_DATAREAD,phy_addr,1f,d2x(x2d('400')+item+64*dsp_addr,4));
+								tmp1=etc_cli(MMD_DATAREAD,phy_addr,1f,d2x(x2d('400')+item+64*dsp_addr,4));
+								tmp2=etc_cli(MMD_DATAREAD,phy_addr,1f,d2x(x2d('400')+item+1+64*dsp_addr,4));
+								tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+								tmp=substr(tmp1,3,2)||substr(tmp2,3,2);
+								ln=ln||format(x2d(tmp),7,0)|| "|"
+							end
+						end
+					end
+				end	
+				say ln
+			end
+		end
+		when cmd="cdbfcsiw" then do
+			parse var line cmd " " addr " " val " " rest
+			tmp=etc_cli(REGSET,F80C,addr);
+			tmp=etc_cli(REGSET,F810,val);
+		end
+		when cmd="cdbfcsir" then do
+			parse var line cmd " " addr " " val " " rest
+			tmp=etc_cli(REGSET,F80C,d2x(x2d(addr)+x2d("2100"),4));
+			tmp=etc_cli(REGGET,F810);
+			say tmp||"^M";
+		end
+
+		when cmd="set" then do
+			parse var line cmd " " varname " " varval " " rest
+			select 
+				when varname='view_root' then do 
+					view_root=varval;
+				end
+				when varname='fw_root' then do 
+					fw_root=varval;
+				end
+				when varname='fwdl_name' then do 
+					fwdl_name=varval;
+				end
+				otherwise do
+					say "view_root= "||view_root||"^M";
+					say "fw_root  = "||fw_root||"^M";
+					say "fwdl_name= "||fwdl_name||"^M";
+				end
+			end
+		end
+		when cmd="stat" then do
+			parse var line cmd " " phy " " logname " " rest
+			-- -----
+			-- Read the status bits of DFE/EXC/PCS-TXB/PCS-RXB/DSP/ASP
+			-- -----
+			statlst='<s> DFE_STAT <S> EC_CTL EC_CTLE XC_CTL0 XC_CTL1 XC_TCL2 <s> ECDELSTAT XCDELSTAT0 XCDELSTAT1 XCDELSTAT2 <S> DSP_STAT <s> PCS_TXB_STAT <S> PCS_RXB_STAT <S> AFE_STAT <S> '
+			addrlst='<s> 826 <s> 809 80A 80B 80C 80D <s> 81D 81F 821 823 <s> 853 <s> 797 <s> 79B <s> DA9 <s> '  
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			do while length(addrlst)>0 
+				parse var statlst stat " " statlst
+				parse var addrlst addr " " addrlst
+				if addr='<s>' then do 
+					say "%%--------------------+-------+-------+-------+-------|^M";
+				end
+				else do
+					ln="% "||substr(stat||'               ',1,20)||"|";  
+					do i = 0 to 3
+						phy_addr=d2x(x2d(addr)+i*x2d('65'),4);
+						tmp=etc_cli(MMD_DATAREAD,phy,1f,phy_addr);
+						ln=ln||substr(tmp||'      ',1,7)||"|";
+						tmp=etc_cli(MMD_DATAWRITE,phy,1f,phy_addr,tmp);
+					end 
+					say ln||"^M";
+				end
+			end
+			-- -----
+			-- Read the coefficients of EXC
+			-- -----
+			sel_lst="3 0 1 2";
+			sz_lst ="127 31 31 31";
+			name_lst="ecc xc0 xc1 xc2";
+			do while length(sel_lst)>0 
+				parse var sel_lst sel " " sel_lst;
+				parse var sz_lst  sz  " " sz_lst;
+				parse var name_lst name " " name_lst;
+				say "%%--------------------+-------+-------+-------+-------|^M";
+				say "%%      "|| name || " Coefficient^M";
+				say "%%--------------------+-------+-------+-------+-------|^M";
+				say name||"_coef=[ ...^M";
+				cfbs=d2x(x2d('816') + x2d('65')*i,4);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,cfbs,sel); -- access EC
+				do addr=0 to sz
+					ln="                      ";
+					do i=0 to 3
+						cfaddr=d2x(x2d('817') + x2d('65')*i,4);
+						coef_rd_H=d2x(x2d('81A') + x2d('65')*i,4);
+						coef_rd_L=d2x(x2d('81B') + x2d('65')*i,4);
+						tmp=etc_cli(MMD_DATAWRITE,phy,1F,cfaddr,d2x(addr)); -- access EC
+						data1=etc_cli(MMD_DATAREAD,phy,1F,coef_rd_H);
+						data2=etc_cli(MMD_DATAREAD,phy,1F,coef_rd_L);
+						data=x2d(substr(data1,3,2)||substr(data2,3,2));
+						if (data>32767) then do 
+							data=data-65536;
+						end
+						ln = ln||format(data,7)||" ";
+					end
+					say ln||"...^M";
+				end
+				say "];^M"
+			end
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="cdiag" then do
+			parse var line cmd " " phy " " opt " " rest 
+			tmp=etc_cli(MDIO_DATAWRITE,phy,9,'c38'||opt);
+		end
+		when cmd="abist" then do
+			parse var line cmd " " phy " " rest
+			tmp=etc_cli(MDIO_DATAWRITE,phy,9,E3C1);
+			say   "^M---------------------------------------------------";
+			say   "^MABIST TEST ITEM           ASPA   ASPB   ASPC   ASPD";
+			say   "^M---------------------------------------------------^M";
+			abist.0 ="ICN_GMIN_MAG_MAX       ";fmt.0=2;
+			abist.1 ="ICN_GMIN_MAG_MIN       ";fmt.1=2;
+			abist.2 ="ICN_GMIN_MAG_AVG       ";fmt.2=2;
+			abist.3 ="ICN_GMIN_MAG_DC        ";fmt.3=2;
+			abist.4 ="ICN_GMAX_MAG_MAX       ";fmt.4=2;
+			abist.5 ="ICN_GMAX_MAG_MIN       ";fmt.5=2;
+			abist.6 ="ICN_GMAX_MAG_AVG       ";fmt.6=2;
+			abist.7 ="ICN_GMAX_MAG_DC        ";fmt.7=2;
+			abist.8 ="AGC_PWR0               ";fmt.8=1;
+			abist.9 ="AGC_PWR1               ";fmt.9=1;
+			abist.10="AGC_PWR2               ";fmt.10=1;
+			abist.11="AGC_PWR3               ";fmt.11=1;
+			abist.12="AGC_PWR4               ";fmt.12=1;
+			abist.13="AGC_PWR5               ";fmt.13=1;
+			abist.14="AGC_PWR6               ";fmt.14=1;
+			abist.15="AGC_PWR7               ";fmt.15=1;
+			abist.16="THD_DC_MAG             ";fmt.16=2;
+			abist.17="THD_K1_MAG             ";fmt.17=2;
+			abist.18="THD_K2_MAG             ";fmt.18=2;
+			abist.19="THD_K3_MAG             ";fmt.19=2;
+			abist.20="THD_K4_MAG             ";fmt.20=2;
+			abist.21="THD_DC_MAG_1000_HYB    ";fmt.21=2;
+			abist.22="THD_K1_MAG_1000_HYB    ";fmt.22=2;
+			abist.23="THD_K2_MAG_1000_HYB    ";fmt.23=2;
+			abist.24="THD_K3_MAG_1000_HYB    ";fmt.24=2;
+			abist.25="THD_K4_MAG_1000_HYB    ";fmt.25=2;
+			abist.26="THD_DC_MAG_1000_NOHYB  ";fmt.26=2;
+			abist.27="THD_K1_MAG_1000_NOHYB  ";fmt.27=2;
+			abist.28="THD_K2_MAG_1000_NOHYB  ";fmt.28=2;
+			abist.29="THD_K3_MAG_1000_NOHYB  ";fmt.29=2;
+			abist.30="THD_K4_MAG_1000_NOHYB  ";fmt.30=2;
+			abist.31="EXC_PWR_RES_ERR        ";fmt.31=1;
+			abist.32="EXC_PWR_ECHO           ";fmt.32=1;
+			abist.33="EXC_PWR_NXTA           ";fmt.33=1;
+			abist.34="EXC_PWR_NXTB           ";fmt.34=1;
+			abist.35="EXC_PWR_NXTC           ";fmt.35=1;
+			abist.36="ASP_STAT               ";fmt.36=3;
+			abist.37="PLL_STAT               ";fmt.37=3;
+			abist.38="BIAS_STAT              ";fmt.38=3;
+			abist.39="ADC_BER                ";fmt.39=3;
+			ZocDelay 2;
+			do i=0 to 38
+				ln="";
+				do j=0 to 3
+					tmp=etc_cli(MMD_DATAREAD,phy,1f,d2x(i+j*40));
+					tmp=x2d(tmp);
+					if fmt.i=1 then do 
+						ln=ln||format(tmp,4,2);
+					end
+					if fmt.i=2 then do
+						ln=ln||format(tmp/2,4,2);
+					end
+					if fmt.i=3 then do
+						ln=ln||"     "||d2x(tmp,2);
+					end   
+				end
+				say abist.i||ln||"^M";
+			end
+			say   "---------------------------------------------------^M";
+		end
+		when cmd="epgdump" then do
+            tmp='8100';
+			cnt=1;
+			acc='';
+			say 'a=[...';
+			do while substr(tmp,2,1)=='1'
+				tmp=etc_cli(REGGET,F141); 
+				acc=acc||substr(tmp,3,2);
+				if  cnt//2==0 then do
+					rr=b2x(substr(x2b(acc),2,9));
+					rr=x2d(rr);
+					if (rr>255) then do
+						rr=rr-512;
+					end
+					say rr||"   % "||acc; 
+					acc='';
+				end
+				cnt=cnt+1;
+			end
+			say '];';
+			say "nBytes="||cnt
+			tmp=etc_cli(REGSET,f142,1); --flush the buffer anyhow
+		end
+		when cmd="epgsnap" then do
+			-- -----------------------------------------------
+			-- Capture
+			-- -----------------------------------------------
+			parse var line cmd " " phy " " __sz " " __src " " 
+			say "DBG:: " phy " " __sz " " __src 
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A80,00);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A84,21);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A82,__sz);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A81,67);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A85,33);
+			-- PMA PDI DBG configuration
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FB,87); 
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FB,85); 
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FC,__src);  
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A80,05);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A80,07);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="epgcfg" then do 
+			parse var line cmd " " phy " " 
+			-- Enable Switch
+			tmp=etc_cli(REGSET,F400,8000);
+			-- PCE_PMAP3 -> for default for unicast frames to Port 6 (CPU port)
+			tmp=etc_cli(REGSET,E455,0040);
+			-- PCE_CTRL -> for all ports, disable learning and ingressport-removal
+			tmp=etc_cli(REGSET,E483,C000);
+			tmp=etc_cli(REGSET,E48D,C000);
+			tmp=etc_cli(REGSET,E497,C000);
+			tmp=etc_cli(REGSET,E4A1,C000);
+			tmp=etc_cli(REGSET,E4AB,C000);
+			tmp=etc_cli(REGSET,E4B5,C000);
+			tmp=etc_cli(REGSET,E4BF,C000);
+			-- Disable autopoll
+			tmp=etc_cli(REGSET,F40B,0000);
+			-- Force 1G linkup on all Port
+			tmp=etc_cli(REGSET,F415,32A0); -- port 0
+			tmp=etc_cli(REGSET,F414,32A1); -- port 1
+			tmp=etc_cli(REGSET,F413,32A2); -- port 2
+			tmp=etc_cli(REGSET,F412,32A3); -- port 3
+			tmp=etc_cli(REGSET,F411,32A4); -- port 4
+			tmp=etc_cli(REGSET,F410,32A5); -- port 5
+			tmp=etc_cli(REGSET,F40F,32A6); -- port 6
+			-- Force JUMBO FRAME on all Port
+			tmp=etc_cli(REGSET,E905,000D); -- port 0
+			tmp=etc_cli(REGSET,E911,000D); -- port 1
+			tmp=etc_cli(REGSET,E91D,000D); -- port 2
+			tmp=etc_cli(REGSET,E929,000D); -- port 3
+			tmp=etc_cli(REGSET,E935,000D); -- port 4
+			tmp=etc_cli(REGSET,E941,000D); -- port 5
+			tmp=etc_cli(REGSET,E94D,000D); -- port 6
+			-- Force no drop frame due to CRC
+			tmp=etc_cli(REGRMW,EBC0,0020,0020) -- port 0
+			tmp=etc_cli(REGRMW,EBC6,0020,0020) -- port 1
+			tmp=etc_cli(REGRMW,EBCC,0020,0020) -- port 2
+			tmp=etc_cli(REGRMW,EBD2,0020,0020) -- port 3
+			tmp=etc_cli(REGRMW,EBD8,0020,0020) -- port 4
+			tmp=etc_cli(REGRMW,EBDE,0020,0020) -- port 5
+			tmp=etc_cli(REGRMW,EBE4,0020,0020) -- port 6
+			-- ENABLE PACKET EXTRACTOR MODE
+			tmp=etc_cli(REGRMW,F130,0200,0200);
+			-- EPG PDI configuration
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A80,00);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A84,21);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A82,04);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A81,67);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A85,33);
+			-- ENABLE PCS
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,77B,31);
+			-- ENABLE RXB
+			-- PMA PDI DBG configuration
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FC,28);  
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FB,86); 
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,7FB,85); 
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,A80,05);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,799,01);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,799,00);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,79A,2);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,798,1);
+		end
+		when cmd="rmon" then do
+			parse var line cmd " " subcmd " " _rest;
+			reglist="";
+			regtag.0 ="Transmit 64 Frame Count           ";
+			regtag.1 ="Transmit 65-127 Frame Count       ";
+			regtag.2 ="Transmit 128-255 Frame Count      ";
+			regtag.3 ="Transmit 256-511 Frame Count      ";
+			regtag.4 ="Transmit 512-1023 Frame Count     ";
+			regtag.5 ="Transmit Greater 1024 Frame Count ";
+			regtag.6 ="Transmit Unicast Frame Count      ";
+			regtag.7 ="Transmit Multicast Frame Count    ";
+			regtag.8 ="Transmit Single Collision Count   ";
+			regtag.9 ="Transmit Multiple Collision Count ";
+			regtag.10="Transmit Late Collision Count     ";
+			regtag.11="Transmit Excessive Collision      ";
+			regtag.12="Transmit Frame Count              ";
+			regtag.13="Transmit Pause Frame Count        ";
+			regtag.14="Transmit Good Byte Count (Low)    ";
+			regtag.15="Transmit Good Byte Count (High)   ";
+			regtag.16="Transmit Dropped Frame Count      ";
+			regtag.17="Egress Queue Discard Frame Count  ";
+			regtag.18="Receive 64 Frame Count            ";
+			regtag.19="Receive 65-127 Frame Count        ";
+			regtag.20="Receive 128-255 Frame Count       ";
+			regtag.21="Receive 256-511 Frame Count       ";
+			regtag.22="Receive 512-1023 Frame Count      ";
+			regtag.23="Receive Greater 1023 Frame Count  ";
+			regtag.24="Receive Discard Frame Count       ";
+			regtag.25="Receive Drop (Filter) Frame Count ";
+			regtag.26="Receive Alignment Errors Count    ";
+			regtag.27="Receive Oversize Good Count       ";
+			regtag.28="Receive Oversize Bad Count        ";
+			regtag.29="Receive Undersize Good Count      ";
+			regtag.30="Receive Undersize Bad Count       ";
+			regtag.31="Receive Frame Count               ";
+			regtag.32="Receive Pause Good Count          ";
+			regtag.33="Receive CRC Errors Count          ";
+			regtag.34="Receive Multicast Frame Count     ";
+			regtag.35="Receive Unicast Frame Count       ";
+			regtag.36="Receive Good Byte Count (Low)     ";
+			regtag.37="Receive Good Byte Count (High)    ";
+			regtag.38="Receive Bad Byte Count (Low)      ";
+			regtag.39="Receive Bad Byte Count (High)     ";
+			regtag.40="----------------------------------";
+			regtag.41="RMON Counter Name                 ";
+			select 
+				when subcmd="read" then do
+					reglist="1F 21 1D 1E 1B 1C 1A 18 19 11 0C 08 09 0A 0B 0D 10"
+					_rest1=_rest;
+					_oln1=regtag.41;
+					_oln=regtag.40;
+					do while length(_rest1)>0
+						parse var _rest1 port " " _rest1;
+						_oln = _oln||"-+--------------";
+						_oln1=_oln1||" |   PORT "||format(x2d(port),2)||"    ";
+					end;
+					say _oln "^M";
+					say _oln1 "^M";
+					say _oln "^M";
+					do while length(reglist)>0
+						parse var reglist regoffset " " reglist;
+						_rest1=_rest;
+						tmp=x2d(regoffset);
+						_oln=regtag.tmp;
+						tmp=etc_cli(REGSET,E044,regoffset);
+						do while length(_rest1)>0
+							parse var _rest1 port " " _rest1;
+							tmp=d2x(x2d('8000')+x2d(port),4);
+							tmp=etc_cli(REGSET,E045,tmp);
+							lsw=etc_cli(REGGET,E043);
+							msw=etc_cli(REGGET,E042);
+							_oln = _oln "|" format(x2d(msw||lsw),13,0) ;
+						end
+						say _oln "^M";
+					end 
+				end
+				when subcmd="clear" then do
+					_rest1=_rest;
+					do while length(_rest1)>0
+						parse var _rest1 port _rest1;
+						regaddr='E'||d2x((x2d('81')+x2d(port)*2),3);
+						tmp=etc_cli(REGSET,regaddr,3);
+						tmp=etc_cli(REGSET,regaddr,0);
+					end
+				end
+				when subcmd="on" then do
+					_rest1=_rest;
+					do while length(_rest1)>0
+						parse var _rest1 port _rest1;
+						regaddr='E'||d2x((x2d('80')+x2d(port)*2),3);
+						tmp=etc_cli(REGSET,regaddr,1);
+					end
+				end
+				when subcmd="off" then do
+					_rest1=_rest;
+					do while length(_rest1)>0
+						parse var _rest1 port _rest1;
+						regaddr='E'||d2x((x2d('80')+x2d(port)*2),3);
+						tmp=etc_cli(REGSET,regaddr,0);
+					end
+				end
+				otherwise do
+					say "** unknown RMON subcommands, <read,on,off,clear> ** "
+				end
+			end
+		end
+		when cmd="ldbias" then do 
+			parse var line cmd " " ld0 " " ld1 " " ld2 " " rest
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,D93,ld0);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,D94,ld1);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,D95,ld2);
+				say "MDIO PHY " phy " Set to LDBIAS " ld0 " " ld1 " " ld2
+			end
+		end
+		when cmd="afefcsiw" then do 
+			parse var line cmd " " phy " " reg " " data " "  
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,2);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db9,reg);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,dba,substr(data,1,2));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,dbb,substr(data,3,2));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,81);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="afefcsir" then do 
+			parse var line cmd " " phy " " reg " " 
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,2);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db9,reg);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,db8,01);
+			ZocDelay 1;
+			data1=etc_cli(MMD_DATAREAD,phy,1f,dba);
+			data2=etc_cli(MMD_DATAREAD,phy,1f,dbb);
+			say "Data= "||data1||"::"||data2;
+		end
+		when cmd="fetune1" then do
+			parse var line cmd " " phy " " data " " 
+			dsp=0;
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,1F0,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,d2x((2**(dsp+3))+4,4));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9C8,d2x(x2d('10')+x2d('2'),4));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9C9,substr(data,1,2));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9CA,substr(data,3,2));
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9C1,3);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9BE,6);
+			ZocDelay 1
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9BE,7);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,9C1,1);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,1F0,1);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,0);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end 
+		when cmd="coefr" then do
+			parse var line cmd " " phy " " dsp " " opt " " offset " "  ndata " " name " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,d2x((2**(dsp+3))+4,4));
+			sel='00';
+			excsel=0;
+			select 
+				when opt = "LEQ" then do
+					sel='00'
+				end
+				when opt = "FBEQ" then do 
+					sel='20'
+				end
+				when opt = "LC" then do
+					sel='40' 
+				end
+				when opt = "EC" then do 
+					sel='03'
+					excsel=1;
+				end
+				when opt = "XC0" then do
+					sel='00'
+					excsel=1;
+				end
+				when opt = "XC1" then do 
+					sel='01'
+					excsel=1;
+				end
+				when opt = "XC2" then do 
+					sel='02'
+					excsel=1;
+				end
+			end
+			say name " = [ ...";
+			oln= "     ";
+			cnt=1;
+			do i=0 to x2d(ndata)-1 	
+				if excsel==0 then do
+					tmp=etc_cli(MMD_DATAWRITE,phy,1f,9C8,d2x(x2d(sel)+x2d(offset)+i,4));
+					tmp1=etc_cli(MMD_DATAREAD,phy,1f,9CB);
+					tmp2=etc_cli(MMD_DATAREAD,phy,1f,9CC);
+				end
+				if excsel==1 then do
+					tmp=etc_cli(MMD_DATAWRITE,phy,1f,9AA,sel);
+					tmp=etc_cli(MMD_DATAWRITE,phy,1f,9AB,d2x(x2d(offset)+i,4));
+					tmp1=etc_cli(MMD_DATAREAD,phy,1f,9AE);
+					tmp2=etc_cli(MMD_DATAREAD,phy,1f,9AF);
+				end
+				data2=(substr(tmp1,3,2)||substr(tmp2,3,2))
+				data=x2d(data2);
+				if data>32767 then do
+					data=data-65536;
+				end
+				oln=oln||format(data,6)||";";
+				if (cnt==16) then do
+					say oln; 
+					oln= "     ";
+					cnt=1;
+				end
+				else do 
+					cnt=cnt+1;
+				end;
+			end
+			if cnt >1 then do
+				say oln;
+			end
+			say "];";
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,0);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end      
+		when cmd="coefw" then do
+			parse var line cmd " " phy " " dsp " " opt " " offset " "  data " " 
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			if phy="all" then do 
+				phy="0 1 2 3 4"
+			end
+			do while length(phy)>0
+				parse var phy phyaddr " " phy
+				if dsp="all" then do 
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,764,0);
+				end
+				else do 
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,764,d2x((2**(dsp+3))+4,4));
+				end
+				sel='10';
+				excsel=0;
+				select 
+					when opt = "LEQ" then do
+						sel='10'
+					end
+					when opt = "FBEQ" then do 
+						sel='30'
+					end
+					when opt = "LC" then do
+						sel='50' 
+					end
+					when opt = "ECML" then do 
+						sel='03'
+						offset1=d2x( 0 + x2d(offset),4);
+						sz=32;
+						excsel=1;
+					end
+					when opt = "ECMU" then do 
+						sel='03'
+						offset1=d2x( 32 + x2d(offset),4);
+						sz=32;
+						excsel=1;
+					end
+					when opt = "ECT" then do 
+						sel='03'
+						offset1=d2x( 64 + x2d(offset),4);
+						sz=64;
+						excsel=1;
+					end
+					when opt = "XC0" then do
+						sel='00'
+						offset1=d2x( 0 + x2d(offset),4);
+						sz=32;
+						excsel=1;
+					end
+					when opt = "XC1" then do 
+						sel='01'
+						offset1=d2x( 0 + x2d(offset),4);
+						sz=32;
+						excsel=1;
+					end
+					when opt = "XC2" then do 
+						sel='02'
+						offset1=d2x( 0 + x2d(offset),4);
+						sz=32;
+						excsel=1;
+					end 
+					otherwise do 
+					   say "*** UNKNOWN OPTION:: "||opt||"^M";   
+					end
+				end
+				if excsel==0 then do	
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9C8,d2x(x2d(sel)+x2d(offset),4));
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9C9,substr(data,1,2));
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9CA,substr(data,3,2));
+				end
+				if excsel==1 then do
+					tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9AA,sel);
+					ndata=0;
+					if substr(data,1,4)="all_" then do 
+						ndata=sz-1;
+						data1=substr(data,5,4);
+					end
+					do i=0 to ndata
+						tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9AB,d2x(x2d(offset1)+i+x2d('80'),4));
+						tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9AC,substr(data1,1,2));
+						tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,9AD,substr(data1,3,2));
+						say phyaddr||"=="||opt||"::"||i||"="||data1||"^M";
+					end
+				end
+				tmp=etc_cli(MMD_DATAWRITE,phyaddr,1f,764,0);
+			end
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="cdbagc" then do
+			tmp=etc_cli(REGSET,F840,4000);
+			tmp=etc_cli(REGSET,F80C,0010);
+			tmp=etc_cli(REGSET,F810,DDDA);
+			tmp=etc_cli(REGSET,F80C,0011);
+			tmp=etc_cli(REGSET,F810,DDDA);
+			tmp=etc_cli(REGSET,F80C,0012);
+			tmp=etc_cli(REGSET,F810,DDDA);
+			tmp=etc_cli(REGSET,F80C,0013);
+			tmp=etc_cli(REGSET,F810,DDDA);
+			tmp=etc_cli(REGSET,F844,0810);
+		end
+		when cmd="adccal" then do
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,D09,10);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,D17,03);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,D16,C3);
+		end
+		when cmd="ecloop" then do
+			tmp=etc_cli(MDIO_DATAWRITE,1,13,0);
+			tmp=etc_cli(MMD_DATAWRITE,1,1f,1F0,5);
+			tmp=etc_cli(MDIO_DATAWRITE,1,0,2100);
+			ZocDelay 1
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,82D,03);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,82F,00);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,808,0B);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,81C,13);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,80A,01);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,809,1A);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,81C,12);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,808,0A);
+			tmp=etc_cli(MMD_DATAWRITE,1,1F,80E,08);
+		end
+		when cmd="dumpalleye" then do
+			parse var line cmd " " rest
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			do while length(rest)>0
+				parse var rest phy " " rest
+				name="GPHY"||phy||"_rxeyeA";
+				tmp=etc_cli(STBDUMP,phy,0,2,name);
+				name="GPHY"||phy||"_rxeyeB";
+				tmp=etc_cli(STBDUMP,phy,1,2,name);
+				name="GPHY"||phy||"_rxeyeC";
+				tmp=etc_cli(STBDUMP,phy,2,2,name);
+				name="GPHY"||phy||"_rxeyeD";
+				tmp=etc_cli(STBDUMP,phy,3,2,name);
+			end
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="dbgeee" then do
+			parse var line cmd " " fw2v0 " " rest
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(REGSET,F41D,D);
+			tmp=etc_cli(REGSET,F41E,D);
+			tmp=etc_cli(REGSET,F41F,D);
+			tmp=etc_cli(REGSET,F420,D);
+			tmp=etc_cli(REGSET,F421,D);
+			tmp=etc_cli(REGSET,F422,D);
+			tmp=etc_cli(REGSET,F423,D);
+			tmp=etc_cli(REGSET,E907,289a);
+			tmp=etc_cli(REGSET,E913,289a);
+			tmp=etc_cli(REGSET,E91F,289a);
+			tmp=etc_cli(REGSET,E92B,289a);
+			tmp=etc_cli(REGSET,E937,289a);
+			tmp=etc_cli(REGSET,E943,289a);
+			tmp=etc_cli(REGSET,E94F,289a);
+
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MMD_DATAWRITE,phy,7,3c,6);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1f,1ce,fw2v0);
+			end
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="dbgge" then do
+			parse var line cmd " " phy1 " " phy2 " " mode " " rest
+			mdio1=substr(phy1,1,1);
+			ms1=substr(phy1,2,1);
+			mdio2=substr(phy2,1,1);
+			ms2=substr(phy2,2,1);
+			say "Reset GPHY^M"
+			tmp=etc_cli(REGSET,FA01,1F);
+			tmp=etc_cli(REGSET,F400,8000);
+			tmp=etc_cli(REGSET,FA01,00);
+			ZocDelay 1;
+			select
+				when ms1='s' then do 
+					ms1='1300';
+				end
+				when ms1='m' then do 
+					ms1='1b00';
+				end
+				when ms1='a' then do 
+					ms1='0700';
+				end
+			end
+			select
+				when ms2='s' then do 
+					ms2='1300';
+				end
+				when ms2='m' then do 
+					ms2='1b00';
+				end
+				when ms2='a' then do 
+					ms2='0700';
+				end
+			end
+			tmp=etc_cli(MDIO_DATAWRITE,mdio1,9,ms1);
+			tmp=etc_cli(MDIO_DATAWRITE,mdio2,9,ms2);
+			select 
+				when mode='fetl' then do 
+					tmp=etc_cli(MDIO_DATAWRITE,mdio1,13,4001);
+					tmp=etc_cli(MDIO_DATAWRITE,mdio2,13,4001);
+				end
+				otherwise do 
+					tmp=etc_cli(MDIO_DATAWRITE,mdio1,13,0001);
+					tmp=etc_cli(MDIO_DATAWRITE,mdio2,13,0001);
+				end
+			end
+			tmp=etc_cli(MDIO_DATAWRITE,mdio1,15,0800);
+			tmp=etc_cli(MDIO_DATAWRITE,mdio2,15,0800);
+			tmp=etc_cli(MDIO_DATAREAD,mdio1,15);
+			tmp=etc_cli(MDIO_DATAREAD,mdio2,15);
+			say "Restarting link from DUT side^M";
+			tmp=etc_cli(MDIO_DATAWRITE,mdio1,0,1200);
+			tmp=etc_cli(MDIO_DATAWRITE,mdio2,0,1200);
+			ls=0;
+			timeout=0;
+			lnkchk=0;
+			say "Waiting for proper link up^M";
+			do while ls=0
+				ls1=etc_cli(MDIO_DATAREAD,mdio1,01);
+				ls1=etc_cli(MDIO_DATAREAD,mdio1,01);
+				ls2=etc_cli(MDIO_DATAREAD,mdio2,01);
+				ls2=etc_cli(MDIO_DATAREAD,mdio2,01);
+				ls1=substr(reverse(x2b(ls1)),3,1);
+				ls2=substr(reverse(x2b(ls2)),3,1);
+				if ls1||ls2 = '11' then do
+					lnkchk=lnkchk+1; 
+				end;
+				else do 
+					lnkchk=0;
+				end;
+				if lnkchk=5 then do 
+					ls = 1;
+				end
+				if timeout=40 then do
+					say "***TIME OUT WAITING for phy to link^M" 
+					ls = 2;
+				end
+				timeout=timeout+1;
+				ZocDelay 1;
+			end
+			-- report status 
+			say "Link Status^M";
+			tmp=etc_cli(LINK_STATUS,mdio1);
+			tmp=etc_cli(LINK_STATUS,mdio2);
+			if mode='mfetl' then do 
+				say "Doing MANUAL FETL after link up^M"
+				tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+				tmp=etc_cli(MMD_DATAWRITE,mdio1,1F,77F,1);
+				tmp=etc_cli(MMD_DATAWRITE,mdio2,1F,77F,1);
+				tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+			end
+			say "clearing RMON"
+			tmp=etc_cli(RMON_CLEAR);
+			say "done^M";
+		end	
+		when cmd="tm" then do 
+			parse var line cmd " " tm " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,300);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,tm);
+				say "MDIO PHY " phy " Set to Test Mode " tm
+			end
+		end
+		when cmd="forcegem" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,1b00);
+				--tmp=etc_cli(MDIO_DATAWRITE,phy,14,B806);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				say "MDIO PHY " phy " Set to force GE Master mode"
+			end
+		end
+		when cmd="forceges" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,1300);
+				--tmp=etc_cli(MDIO_DATAWRITE,phy,14,B806);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				say "MDIO PHY " phy " Set to force GE Master mode"
+			end
+		end
+		when cmd="forcetbt" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,13,0000);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,0000);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,0100);
+				say "MDIO PHY " phy " Set to force TBT mode"
+			end
+		end
+		when cmd="forcefe" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,13,0000);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,9,0000);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,2100);
+				--tmp=etc_cli(MMD_DATAWRITE,phy,1f,83a,1);
+				say "MDIO PHY " phy " Set to force FE mode"
+			end
+		end
+		when cmd="forcealltx" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,7F9,0000);
+				tmp=etc_cli(MMD_DATAWRITE,phy,1F,D81,000F);
+				say "MDIO PHY " phy " Set to all pair TX from DSPA"
+			end    
+		end
+		when cmd="mdiopd" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest="0 1 2 3 4"
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,0800);
+				say "MDIO PHY " phy " Powerdown via MDIO PD"
+			end
+		end
+		when cmd="fetl" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest='0 0 1 2 3 4 '
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,13,4001);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				say "MDIO PHY " phy " set to FETL"
+			end
+		end
+		when cmd="fetls" then do 
+			parse var line cmd " " rest
+			if rest='all' then do 
+				rest='0 0 1 2 3 4 '
+			end
+			do while length(rest)>0
+				parse var rest phy " " rest
+				tmp=etc_cli(MDIO_DATAWRITE,phy,13,A001);
+				tmp=etc_cli(MDIO_DATAWRITE,phy,0,1200);
+				say "MDIO PHY " phy " set to FETL"
+			end
+		end
+		when cmd="dbg2" then do
+			tmp=etc_cli(REGsET,FA01,1F);
+			tmp=etc_cli(REGSET,F880,5D40);
+			tmp=etc_cli(REGSET,F884,028F);
+			tmp=etc_cli(REGSET,F890,A124);
+			tmp=etc_cli(REGSET,F880,5D41);
+			tmp=etc_cli(REGGET,F880);say tmp;
+			tmp=etc_cli(REGSET,F719,0418);
+			tmp=etc_cli(REGSET,FA01,1D);
+		end
+		when cmd="dbg" then do
+			tmp=etc_cli(MDIO_DATAWRITE,1,13,0);
+			tmp=etc_cli(MDIO_DATAWRITE,2,13,4);
+			tmp=etc_cli(MDIO_DATAWRITE,1,9,1300);
+			tmp=etc_cli(MDIO_DATAWRITE,2,9,1b00);
+			tmp=etc_cli(MDIO_DATAWRITE,1,0,1200);
+			tmp=etc_cli(MDIO_DATAWRITE,2,0,1200);
+		end
+		when cmd="uart" then do
+			parse var line cmd " " phy " " stat " "
+			if phy="all" then do
+				phy2=31;
+			end;
+			else do
+				phy2=2**(phy);
+			end
+			select 
+				when stat="on" then do
+					tmp=etc_cli(REGRMW,F393,0000,d2x(phy2*32,4)); 
+					tmp=etc_cli(REGRMW,F394,7fff,d2x(phy2*32,4)); 
+				end
+				when stat="off" then do 
+					tmp=etc_cli(REGRMW,F393,7fff,d2x(phy2*32,4)); 
+					tmp=etc_cli(REGRMW,F394,0000,d2x(phy2*32,4)); 
+				end
+				when stat="alt" then do 
+					tmp=etc_cli(REGRMW,F393,0000,d2x(phy2*32,4)); 
+					tmp=etc_cli(REGRMW,F394,7fff,d2x(phy2*32,4)); 
+					if phy>2 then do
+						tmp=etc_cli(REGRMW,F393,7fff,d2x(phy2*8,4)); 
+						tmp=etc_cli(REGRMW,F394,7fff,d2x(phy2*8,4)); 
+					end
+				end
+			end
+		end 
+		when cmd="init" then do
+			tmp=etc_cli(REGSET,F840,4000)
+			tmp=etc_cli(REGSET,F80C,0015)
+			tmp=etc_cli(REGSET,F810,0001)
+			ZocDelay 1
+			tmp=etc_cli(REGGET,FA00); say tmp
+		end
+		when cmd="adcdump" then do 
+			parse var line cmd " " phy " " asp " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			do i= 0 to 3
+				ln=""; 
+				do j = 0 to 3
+					tmp=etc_cli(ADCR,phy,asp,i,j);
+					ln = ln || " :: " || tmp;
+				end;
+				say "PP " || i || " ==> " || ln
+			end;
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="adcw" then do
+			parse var line cmd " " phy " " asp " " pp " " offset " " data " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			tmp=etc_cli(ADCW,phy,asp,pp,offset,data);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd="adcr" then do
+			parse var line cmd " " phy " " asp " " pp " " offset " " 
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			tmp=etc_cli(ADCR,phy,asp,pp,offset);
+			say tmp;
+			tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,4);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd=="en" then do
+			parse var line cmd " " flag_en " " baseaddr " "
+			if length(baseaddr)<1 then do
+				baseaddr='8010';
+			end
+			if baseaddr=="?" then do 
+				baseaddr=ZocAsk("FW Base Address");
+			end    
+			tmp=etc_cli(REGSET,FA01,1F);
+			tmp=etc_cli(REGSET,F400,8000);
+			flag=reverse(x2b(flag_en));
+			tmp=etc_cli(REGRMW,F383,3,3);
+			tmp=etc_cli(REGRMW,F384,3,3);
+			tmp=etc_cli(REGSET,F393,7FFF);
+			tmp=etc_cli(REGSET,F394,0000);
+			do i=0 to 4 
+				if (substr(flag,i+1,1)=='0') then do
+					say "EN:: Switching GPHY "||i||" to external EEPROM"
+					tmp=etc_cli(REGSET,d2x(x2d('F700')+i*x2d('10'),4),baseaddr);
+					tmp=etc_cli(REGRMW,F393,0000,d2x(2**(i+5),4)); 
+					tmp=etc_cli(REGRMW,F394,7fff,d2x(2**(i+5),4)); 
+				end
+				else do
+					tmp=etc_cli(REGSET,d2x(x2d('F700')+i*x2d('10'),4),0000);
+				end
+			end
+			tmp=etc_cli(REGSET,FA01,flag_en);
+			ZocDelay 1;
+			do i=0 to 4
+				tmp=etc_cli(REGGET,d2x(x2d('f700')+i*x2d('10'),4));
+				fwv=etc_cli(MDIO_DATAREAD,i,1E); 
+				say "EN:: GPHY " || i || "   BASEADDR=" || tmp || "  FWV=" || fwv;
+			end
+			tmp=etc_cli(REGSET,F400,8000);
+		end 
+		when cmd=="fwdl" then do
+			parse var line cmd " " flag " " name " "
+			baseaddr='8010'
+			if length(name)<1 then do
+				name = view_root||"\"||fw_root||"\obj\"||fwdl_name;
+			end
+			if name=="?" then do
+				name=ZocAsk("FW Download Script Path/name ");
+			end
+			if name=="??" then do
+				name=ZocAsk("FW Download Script Path/name ");
+				baseaddr=ZocAsk("FW Base Address");
+			end
+			tmp=etc_cli(FWDL,name,flag,baseaddr)
+		end
+		when cmd=="stbdump" then do
+			parse var line cmd " " phy " " dsp " " src " " name " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			tmp=etc_cli(STBDUMP,phy,dsp,src,name);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd=="mdior" then do
+			parse var line cmd " " phy " " reg " "
+			if phy="all" then do 
+				phy="0 1 2 3 4 5"
+			end
+			do while length(phy)>0
+				parse var phy phyaddr " " phy
+				tmp=etc_cli(MDIO_DATAREAD,phyaddr,reg);
+				say "MDIO Register Read PHY " || phyaddr || " Reg: " || reg || " == " || tmp;
+			end
+		end
+		when cmd=="mdiow" then do
+			parse var line cmd " " phy " " reg " " data " "
+			if phy="all" then do 
+				phy="0 1 2 3 4 5"
+			end
+			do while length(phy)>0
+				parse var phy phyaddr " " phy
+				tmp=etc_cli(MDIO_DATAWRITE,phyaddr,reg,data);
+				say "MDIO Register Write PHY " || phyaddr || " Reg: " || reg || " == " || data;
+			end
+		end
+		when cmd=="mmdr" then do
+			parse var line cmd " " phy " " mmd " " reg " "
+			if phy="all" then do 
+				phy="0 1 2 3 4 5"
+			end
+			do while length(phy)>0
+				parse var phy phyaddr " " phy 
+				tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+				tmp=etc_cli(MMD_DATAREAD,phyaddr,mmd,reg);
+				say "MMD Register Read PHY " || phyaddr || " MMD:"|| mmd || " Reg: " || reg || " == " || tmp;
+				tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+			end	
+		end
+		when cmd=="mmdrb" then do
+			parse var line cmd " " phy " " mmd " " reg " " nreg " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			do i=0 to x2d(nreg)
+				tmp=etc_cli(MMD_DATAREAD,phy,mmd,d2x(x2d(reg)+i,4));
+				say "MMD Register Read PHY " || phy || " MMD:"|| mmd || " Reg: " || d2x(x2d(reg)+i,4) || " == " || tmp;
+			end
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd=="mmdrbv" then do
+			parse var line cmd " " phy " " mmd " " reg " " nreg " " msk " "
+			tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+			msk_bin=reverse(x2b(msk));
+			do i=0 to x2d(nreg)
+				oln="MMD Register Read PHY " || phy || " MMD:"|| mmd || " Reg: " || d2x(x2d(reg)+i,4) || " == ";
+				do j=0 to 4
+					tmp="    "
+					if (substr(msk_bin,j+1,1)=='1') then do 
+						tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,d2x((2**(j+3))+4,4));
+						tmp=etc_cli(MMD_DATAREAD,phy,1f,d2x(x2d(reg)+i,4));
+					end
+					oln=oln||"::"|| tmp;
+				end
+				say oln;
+			end
+			tmp=etc_cli(MMD_DATAWRITE,phy,1f,764,0);
+			tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+		end
+		when cmd=="mmdw" then do
+			parse var line cmd " " phy " " mmd " " reg " " data " "
+			if phy="all" then do 
+				phy="0 1 2 3 4 5"
+			end
+			do while length(phy)>0
+				parse var phy phyaddr " " phy 
+				tmp=etc_cli(AUTO_POLL_ON_OFF,0);
+				tmp=etc_cli(MMD_DATAWRITE,phyaddr,mmd,reg,data);
+				tmp=etc_cli(AUTO_POLL_ON_OFF,1);
+				say "MMD Register Write PHY " || phyaddr || " MMD:"|| mmd || " Reg: " || reg || " == " || data;
+			end
+		end
+		when cmd=="mr" then do
+			parse var line cmd " " reg " "
+			tmp=etc_cli(REGGET,reg);
+			say "Register Read " || reg || " == " || tmp;
+		end
+		when cmd=="mrb" then do
+			parse var line cmd " " reg " " nreg " "
+			do i=0 to nreg 
+				tmp=etc_cli(REGGET,d2x(x2d(reg)+i,4));
+				say "Register Read " || d2x(x2d(reg)+i,4) || " == " || tmp;
+			end
+		end
+		when cmd=="mw" then do
+			parse var line cmd " " reg " " data " " 
+			say "Register Write " || reg || " with " || data;
+			tmp=etc_cli(REGSET,reg,data);
+		end
+		otherwise do 
+			say "**invalid cmd^M";
+		end
+	end
+	line="";
+end
+else if ((scan=='69') | (scan=='0E')) then do
+   line=left(line,length(line)-1);
+end
+else do
+   line=line||dd;
+   tmp=ZocWrite(dd);
+end
+
+end
+return 

@@ -1,0 +1,709 @@
+/*------------------------------------REXX program  perform the basic operations on GPHY/ETC revision 1.0 ---------------------------------------------------------*/
+/*                                    Copywright@ Lantiq Asia Pacific Pte Ltd                                                                                      */
+
+
+
+
+/*------------------------------------ List of ETC Basic Command line Interface Procedure------------------------------------------------------------------------------- 	*/
+
+/*T0: a=etc_cli(MDIO_DATAREAD,arg(2),arg(3))         				 	arg(1)=command ;arg(2)=PHY ;arg(3)=REG of GPHY 										  	*/
+/*T1: a=etc_cli(MDIO_DATAWRITE,arg(2),arg(3))   				 		arg(1)=command ;arg(2)=PHY;arg(3)=REG ;arg(4)=DATA of GPHY 								*/	
+/*T2: a=etc_cli(MMD_DATAREAD,arg(2),arg(3),arg(4))				     	arg(1)=command ;arg(2)=PHY; arg(3)=DEV; arg(4)=REG of GPHY 								*/
+/*T3: a=etc_cli(MMD_DATAWRITE,arg(2),arg(3),arg(4),arg(5))	         	arg(1)=command ;arg(2)=PHY; arg(3)=DEV; arg(4)=REG;arg(5)=DATA of GPHY 					*/
+/*T4: a=etc_cli(FWCHECK,arg(2),arg(3))							 	 	arg(1)=command ;arg(2)=PHY; arg(3)= FW version register  0x1E of GPHY  					*/
+/*T5: a=etc_cli(REGGET,REG)										 		arg(1)=command ;arg(2)=REG of chip/DUT 													*/
+/*T6: a=etc_cli(REGSET,REG,DATA)							 	 		arg(1)=command ;arg(2)=REG of chip/DUT ;arg(3)=DATA of chip/DUT							*/
+/*T7: a=etc_cli(RMON_CLEAR)									 	 		arg(1)=command ,Read RMON portwise														*/
+/*T8: a=etc_cli(RMON_READ,arg(2))										arg(1)=command; arg(2)=rmon port  														*/
+/*T9: a=etc_cli(REGRMW,REG,DATA,MASK) 	 					arg(1)=command; arg(2)=REG; arg(3)=DATA MASK of register 					 			*/
+/*T10: a=etc_cli(EN_GPHY_UART)								 	 		arg(1)=command; arg(2)= PHY																*/
+/*T11: a=etc_cli(DEBUG_REG,arg(2),arg(3))								arg(1)=command ,arg(2)=start reg;arg(3)=end_reg ; Debug registers reporting 			*/
+/*																	    Ex: GPHY , ETC, Switch etc  GPHY registers dump											*/
+/*T12: a=etc_cli(RMON_READ_ALL_PORTS)						 	 		arg(1)=command , Read the RMON counters of all ports 									*/
+/*T13: a=etc_cli(RMON_EN)									 	 		arg(1)=command 																			*/
+/*T14: a=etc_cli(LINK_SPEED,arg(2))								 	 	arg(1)=command ;arg(2)= PHY 															*/
+/*T15:a=etc_cli(LINK_STATUS,arg(2))										arg(1)=command ;arg(2)= PHY 															*/
+/*T16: a=etc_cli(SWITCH_INIT_RGMII_PORTS)								arg(1)=command ;arg(2)= PHY																*/
+/*T17=etc_cli(AUTO_POLL_ON_OFF,arg(2))							 	 	arg(1)=command ;arg(2)= 0/1  1=ON; 0=OFF												*/
+
+/*------------------------------------ End of Basic ETC Command line Interface Procedure------------------------------------------------------------------------------- 	*/
+
+
+
+PROMPT = ">"
+VERBOSE=0;
+
+
+etc_cli:
+ZocSuppressOutput 1
+SELECT 
+    WHEN ARG(1)=="TFTBL" then do
+		IngressPort = ARG(3)  -- 
+		EgressPort  = ARG(4)  --
+		RuleIndex   = ARG(2)  -- number
+		tmp=etc_cli(REGSET,E440,1f1f);
+		tmp=etc_cli(REGSET,E441,7f0f);
+		tmp=etc_cli(REGSET,E442,FFFF);
+		tmp=etc_cli(REGSET,E443,FFFF);
+		tmp=etc_cli(REGSET,E444,FFFF);
+		tmp=etc_cli(REGSET,E445,FFFF);
+		tmp=etc_cli(REGSET,E446,FFFF);
+		tmp=etc_cli(REGSET,E447,d2x(x2d('7f00')+IngressPort,4));
+		tmp=etc_cli(REGSET,E448,0000);
+		tmp=etc_cli(REGSET,E449,000C);
+		tmp=etc_cli(REGSET,E44A,7F1F);
+		tmp=etc_cli(REGSET,E44B,0000);
+		tmp=etc_cli(REGSET,E44C,EgressPort);
+		tmp=etc_cli(REGSET,E44D,0001);
+		tmp=etc_cli(REGSET,E44E,RuleIndex);
+		tmp=etc_cli(REGSET,E44F,902f);
+		return 1;
+	end
+    WHEN ARG(1)=="ADCR" then do 
+		phy=ARG(2);
+		asp=ARG(3);
+		pp=ARG(4);
+		offset=ARG(5);
+        tmp=etc_cli(MMD_DATAWRITE,phy,1F,764, d2x(2**(x2d(asp)+3)+4,4))
+        bitoff=reverse(x2b(offset));
+		uppsel=b2x(reverse(substr(bitoff,2,2)));
+		selmsb=substr(bitoff,1,1);
+        ppon=substr(bitoff,4,1);
+        tmp=etc_cli(MMD_DATAWRITE,phy,1F,D89,d2x(x2d(uppsel)*64+ppon*16,2));
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,d2x(x2d(pp)*16+selmsb*64+4,2));
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,d2x(x2d(pp)*16+selmsb*64+1+4,2));
+		data=etc_cli(MMD_DATAREAD,phy,1F,D97);
+		tmp=etc_cli(MMD_DATAWRITE,phy,1f,D96,4);
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,764,00)
+        return data
+	end
+	WHEN ARG(1)=="ADCW" then do
+        phy=ARG(2);
+        asp=ARG(3);
+		pp=ARG(4);
+        offset=ARG(5);
+        data=ARG(6);
+        tmp=etc_cli(MMD_DATAWRITE,phy,1F,764, d2x(2**(x2d(asp)+3)+4,4));
+        bitoff=reverse(x2b(offset));
+		uppsel=b2x(reverse(substr(bitoff,2,2)));
+		selmsb=substr(bitoff,1,1);
+        ppon=substr(bitoff,4,1);
+        tmp=etc_cli(MMD_DATAWRITE,phy,1F,D89,d2x(x2d(uppsel)*64+ppon*16,2));
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,D97,data);
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,d2x(x2d(pp)*16+selmsb*64+128+4,2));
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,D96,d2x(x2d(pp)*16+selmsb*64+1+128+4,2));
+		tmp=etc_cli(MMD_DATAWRITE,phy,1f,D96,4);
+		tmp=etc_cli(MMD_DATAWRITE,phy,1F,764,00)
+        return 1
+    end
+    WHEN ARG(1)=="STBDUMP" then do 
+        tmp=etc_cli(MMD_DATAWrite,ARG(2),1F,770,02)
+        tmp=etc_cli(MMD_DATAWrite,ARG(2),1F,772,d2x(x2d(ARG(3))*64,4))
+        tmp=etc_cli(MMD_DATAWrite,ARG(2),1f,9CF,ARG(4))
+        tmp=etc_cli(MMD_DATAWrite,ARG(2),1F,770,03)
+        ZocDelay 2
+        tmp=etc_cli(MMD_DATAWrite,ARG(2),1F,770,02)
+        say ARG(5) || "=[..."
+        tmp=etc_cli(MDIO_DATAWrite,ARG(2),D,1F);
+        tmp=etc_cli(MDIO_DATAWrite,ARG(2),E,400);
+        tmp=etc_cli(MDIO_DATAWrite,ARG(2),D,801F);
+        do j=0 to 15
+			oln= "     ";
+			do i=0 to 15
+				tmp1=etc_cli(MDIO_DATARead,ARG(2),E)
+				tmp2=etc_cli(MDIO_DATARead,ARG(2),E)
+				data2=(substr(tmp1,3,2)||substr(tmp2,3,2))
+				data=x2d(data2);
+				if data>32767 then do
+					data=data-65536;
+				end
+				oln=oln||format(data,6)||";";
+			end
+			say oln;
+		end
+        say '];'
+		return 1;
+    end;
+    WHEN ARG(1)=="FWDL" then do
+		say "FWDL:: Put GPHYS to HALT"
+		tmp=etc_cli(REGSET,FA01,001F);
+		say "FWDL:: ENABLE MSPI MANUAL MODE"
+		tmp=etc_cli(MSPI_MANUAL_ENABLE);
+		say "FWDL:: Erase FLASH"	
+		tmp=etc_cli(MSPI_ERASE);
+		ZocDelay 1;
+		say "FWDL:: UPLOADING NEW FW";
+		call ZocUpload "ASCII:0+0" , ARG(2);
+		ZocDelay 1;
+		SAY "FWDL:: GLOBAL SOFTRESET";
+		tmp=etc_cli(REGSET_NOWAIT,FA01,801F);
+		ZocDelay 1;
+		ZocSend "r^M"; ZocWait PROMPT;
+		tmp=etc_cli(REGSET,FA01,001F);
+		flag=reverse(x2b(ARG(3)));
+		tmp=etc_cli(REGRMW,F383,3,3);
+		tmp=etc_cli(REGRMW,F384,3,3);
+		tmp=etc_cli(REGSET,F393,7FFF);
+		tmp=etc_cli(REGSET,F394,0000);
+		do i=0 to 4 
+			if (substr(flag,i+1,1)=='0') then do
+				say "FWDL:: Switching GPHY "||i||" to external EEPROM"
+				tmp=etc_cli(REGSET,d2x(x2d('F700')+i*x2d('10'),4),ARG(4));
+				tmp=etc_cli(REGRMW,F393,0000,d2x(2**(i+5),4)); 
+				tmp=etc_cli(REGRMW,F394,7fff,d2x(2**(i+5),4)); 
+            end
+        end
+        tmp=etc_cli(REGSET,FA01,ARG(3));
+		ZocDelay 1;
+        do i=0 to 4
+            tmp=etc_cli(REGGET,d2x(x2d('f700')+i*x2d('10'),4));
+            fwv=etc_cli(MDIO_DATAREAD,i,1E); 
+            say "FWDL:: GPHY " || i || "   BASEADDR=" || tmp || "  FWV=" || fwv;
+		end
+		tmp=etc_cli(REGSET,F400,8000);
+        return 1;
+    end
+	WHEN ARG(1)=="MSPI_MANUAL_ENABLE" then do
+        tmp=etc_cli(REGRMW,F383,03C0,03C0);
+		tmp=etc_cli(REGRMW,F384,0000,03C0);
+        tmp=etc_cli(REGRMW,F510,8001,C0FF);
+        tmp=etc_cli(REGRMW,F511,0001,0001);
+        return 1;
+    end 
+    when ARG(1)=="MSPI_ERASE" then do
+        tmp=etc_cli(REGSET,F51C,0600);
+        tmp=etc_cli(REGSET,F512,0008);
+        tmp=etc_cli(REGSET,F51C,6000);
+        tmp=etc_cli(REGSET,F51D,0000);
+        tmp=etc_cli(REGSET,F512,0008);
+        return 1;
+	end
+	when ARG(1)=="MSPI_WRITE" then do
+        addr=d2x(x2d(ARG(2)),4);
+        data=d2x(x2d(ARG(3)),4);
+        tmp=etc_cli(REGSET,F51C,0600);
+        tmp=etc_cli(REGSET,F512,0008);
+        tmp=etc_cli(REGSET,F51C,0200);
+        tmp=etc_cli(REGSET,F51D,addr);
+        tmp=etc_cli(REGSET,F51E,data);
+        tmp=etc_cli(REGSET,F512,000D);
+        return 1;
+	end         
+	when ARG(1)=="MSPI_READ" then do
+        addr=d2x(x2d(ARG(2)),4);
+        tmp=etc_cli(REGSET,F51C,0300);
+        tmp=etc_cli(REGSET,F51D,addr);
+        tmp=etc_cli(REGSET,F512,000F);
+	    tmp=etc_cli(REGGET,F51A);
+        return tmp;
+	end         
+	/* ---------------------------------------------------------*/
+	/* UsageT0 :   etc_cli(MDIO_DATAREAD,phy_addr,phy_reg)      */
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="MDIO_DATAREAD"  THEN  DO
+		__op__= x2d('0800')
+		__phy__=ARG(2)
+		__reg__=x2d(ARG(3))
+        if __phy__="ALL" then do 
+            __phy__="0 1 2 3 4"
+        end
+        __ret__="" 
+        do while length(__phy__)>0
+            parse var __phy__ __phyaddr__ " " __phy__
+		    __tmp__=etc_cli(REGSET,F408,d2x(x2d(__phyaddr__)*32+ __op__ +__reg__,4));
+			ZocDelay 0.2;
+            __tmp__=etc_cli(REGGET,F409);
+			if length(__ret__)=0 then do 
+			    __ret__=__tmp__;
+			end
+			else do
+                __ret__=__ret__||" "||__tmp__;
+			end
+        end;
+		return __ret__;
+	END
+	/* ---------------------------------------------------------*/
+	/* UsageT1 :   etc_cli(MDIO_DATAWRITE,PHY,REG,DATA)         */
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="MDIO_DATAWRITE" THEN DO 
+		__op__= x2d('0400')
+		__phy__=ARG(2)
+		__reg__=x2d(ARG(3))
+	    if __phy__="ALL" then do 
+            __phy__="0 1 2 3 4"
+        end
+		__data__=ARG(4)
+		__tmp__=etc_cli(REGSET_NOWAIT,F40A,__data__);
+        do while length(__phy__)>0
+            parse var __phy__ __phyaddr__ " " __phy__
+	  	    __tmp__=etc_cli(REGSET,F408,d2x(x2d(__phyaddr__)*32+__op__+__reg__,4));
+			--ZocDelay 0.1;
+		end;
+		return 1;
+	END 
+	/* -------------------------------------------------------------*/
+	/*  UsageT2:   etc_cli(MMD_DATAREAD,PHY,DEV,REG)                */	
+	/* -------------------------------------------------------------*/
+	WHEN ARG(1)=="MMD_DATAREAD" THEN DO 
+    	val=ARG(3)
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),D,val);
+    	val=ARG(4)
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),E,val);
+    	val=d2x(x2d(ARG(3))+x2d('4000'))
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),D,val);
+    	a=etc_cli(MDIO_DATAREAD,ARG(2),E);
+        return a;
+	END
+	/* -------------------------------------------------------------*/
+	/*  UsageT3:   etc_cli(MMD_DATAWRITE,PHY,DEV,REG,DATA)          */	
+	/* -------------------------------------------------------------*/
+	WHEN ARG(1)=="MMD_DATAWRITE" THEN DO 
+    	val=ARG(3)
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),D,val);
+    	val=ARG(4)
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),E,val);
+    	val=d2x(x2d(ARG(3))+x2d('4000'))
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),D,val);
+    	val=ARG(5)
+    	a=etc_cli(MDIO_DATAWRITE,ARG(2),E,val);
+        return 1;
+	END
+	/* ---------------------------------------------------------*/
+	/* UsageT4:          etc_cli(FW_CHECK,PHY,1E)                */   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="FW_CHECK" THEN DO
+		a=etc_cli(MDIO_DATAREAD,ARG(2),1E);
+		return a;
+	END
+	/* ---------------------------------------------------------*/
+	/* UsageT5:           etc_cli(REGGET,REG)		            */  
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="REGGET" THEN DO
+		rx=ZocReceiveBuf(512);
+		ZocSend "r " || d2x(x2d(ARG(2)),4) || "^M"; ZocWait PROMPT 
+		msg = ZocString("LINE",ZocReceiveBuf(0),2)
+		parse var msg msg_val " "
+		return msg_val;		
+   	END
+	/* ---------------------------------------------------------*/
+	/* UsageT6:          etc_cli(REGSET,REG,DATA)		        */   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="REGSET_NOWAIT" THEN DO
+        val=d2x(x2d(ARG(2)),4);
+        val2=d2x(x2d(ARG(3)),4);
+		ZocSend "w " || val || " " || val2 || "xxxx^M";
+		return 1;
+    END
+	WHEN ARG(1)=="REGSET" THEN DO
+        val=d2x(x2d(ARG(2)),4);
+        val2=d2x(x2d(ARG(3)),4);
+		ZocSend "w " || val || " " || val2 || "xxxx^M"; ZocWait PROMPT
+		return 1;
+    END
+	/* -----------------------------------------------------------*/
+	/* usageT9:   etc_cli(REGRMW,REG,DATA,MASK)   	  	  */   	
+	/* ex:         etc_cli(REGRMW,0123,13,F8)       	      */
+	/* -----------------------------------------------------------*/
+	WHEN ARG(1)=="REGRMW" THEN DO 
+        reg =d2x(x2d(arg(2)),4);
+        data=d2x(x2d(arg(3)),4);
+        msk =d2x(x2d(arg(4)),4);
+        ZocSend "m " || reg || " " || data || " " || msk "^M"; ZocWait PROMPT
+        return 1
+	END 
+	/* ---------------------------------------------------------*/
+	/* UsageT7:          etc_cli(RMON_CLEAR)    	            */   
+	/* ---------------------------------------------------------*/
+	when ARG(1)=="RMON_CLEAR" THEN DO  
+		say "Enable RMON, ETC_BM_PORT_PDI_[0/1/2/3/4] BM_PCFG"
+		ZocSend "w E080 0001^M"; CALL ZocWait PROMPT 					--- # Enable RMON counters P0
+		ZocSend "w E082 0001^M"; CALL ZocWait PROMPT 					--- # Enable RMON counters P1
+		ZocSend "w E084 0001^M"; CALL ZocWait PROMPT 					--- # Enable RMON counters P2
+		ZocSend "w E086 0001^M"; CALL ZocWait PROMPT 					--- # Enable RMON counters P3
+		ZocSend "w E088 0001^M"; CALL ZocWait PROMPT					--- # Enable RMON counters P4
+		ZocSend "w E08A 0001^M"; CALL ZocWait PROMPT					--- # Enable RMON counters P5
+		ZocSend "w E08C 0001^M"; CALL ZocWait PROMPT					--- # Enable RMON counters P6
+		say "ETHSW_BM_PORT_PDI_[0/1/2/3/4/5/6] BM_RMON_CTRL"
+		ZocSend "w E081 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P0
+		ZocSend "w E083 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P1
+		ZocSend "w E085 0003^M"; CALL ZocWait PROMPT					--- # Clear RMON counters P2
+		ZocSend "w E087 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P3
+		ZocSend "w E089 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P4
+		ZocSend "w E08B 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P5
+		ZocSend "w E08D 0003^M"; CALL ZocWait PROMPT 					--- # Clear RMON counters P6
+		return 0;
+	END
+	/* ---------------------------------------------------------*/
+	/*  UsageT8:         etc_cli(RMON_READ,rmon_port)  			*/   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="RMON_READ" THEN DO 
+		zz=etc_cli(RMON_EN);
+		say " Port :" ARG(2)||" RMON Counter";ZocSend "^M"
+		rmon_size = 64
+		DO i = 0 to rmon_size by 1 
+			xx= i 
+			j="000"|| d2x(xx)
+			IF(j>="00010") THEN  
+  			    IF(j>="0001A") THEN  
+					IF (j<="0001F") THEN DO 
+						j=substr(j,2,4)
+					END	
+			IF (j>="00020") THEN
+				IF(j>="0002A") THEN 		
+					IF(j<="0002F") THEN DO 
+						j=substr(j,2,4)
+				    END		
+			IF(j>="00030") THEN 
+				IF(j>="0003A") THEN 	
+					IF (j<="0003F") THEN  DO
+						j=substr(j,2,4)
+					END 
+			say " j= "j
+			CALL ZocWait PROMPT
+			ZocSend "w E044 "j ;ZocSend "^M"; 							/* BM_RAM_ADDR */
+			CALL ZocWait PROMPT
+			s=d2x(x2d("8000")+ x2d(ARG(2)));
+			ZocSend "w E045 "s ;ZocSend "^M"; 							/* BM_RAM_CTRL */
+			CALL ZocWait PROMPT
+			yy=etc_cli(REGGET,E043)
+			zz=etc_cli(REGGET,E042)
+			data= yy||zz
+			SELECT 
+				WHEN j == "001F" THEN  DO 		
+					say "Rx Frame Count: "data ;ZocSend "^M"
+				END 
+				WHEN j == "0023" THEN  DO 
+					say "Rx Unicast Frame Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "0022" THEN  DO 
+					say "Rx Multicast Frame Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "0021" THEN  DO 
+					say "Rx CRC errors Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "001D" THEN  DO 
+					say "Rx Undersize good Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "001E" THEN  DO 
+					say "Rx Undersize bad Count: "data ;ZocSend "^M"
+				END						
+				WHEN j == "001B" THEN  DO 
+					say "Rx Oversize good Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "001C" THEN  DO 
+					say "Rx Oversize bad Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "0020" THEN  DO 
+					say "Rx Pause good Count: "data ;ZocSend "^M"
+				END	
+				WHEN j == "001A" THEN  DO 
+					say "Rx Alignment errors Count: "data ;ZocSend "^M"
+				END
+				WHEN j == "0012" THEN  DO 
+					say "Rx 64B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0013" THEN  DO 
+					say "Rx 65-127B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0014" THEN  DO 
+					say "Rx 128-255B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0015" THEN  DO 
+					say "Rx size 256-511B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0016" THEN  DO 
+					say "Rx 512-1023B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0017" THEN  DO 
+					say "Rx >1024B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0018" THEN  DO 
+					say "Rx Discard (Tail-Drop) frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0019" THEN  DO 
+					say "Rx Drop ( Filter) frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0024" THEN  DO 
+					say "Rx Good Byte(Low): "data ;ZocSend "^M"
+				END
+				WHEN j == "0025" THEN  DO 
+					say "Rx Good Byte(High): "data ;ZocSend "^M"
+				END
+				WHEN j == "0026" THEN  DO 
+					say "Rx Bad Byte(Low): "data ;ZocSend "^M"
+				END
+				WHEN j == "0027" THEN  DO 
+					say "Rx Bad Byte(High): "data ;ZocSend "^M"
+				END
+				WHEN j == "0011" THEN  DO 
+					say "Rx Discard (Active Congestion Management) frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "000C" THEN  DO 
+					say "Tx Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0006" THEN  DO 
+					say "Tx Unicast Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0007" THEN  DO 
+					say "Tx Multicast Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0000" THEN  DO 
+					say "Tx 64B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0001" THEN  DO 
+					say "Tx 65-127B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0002" THEN  DO 
+					say "Tx 128-255B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0003" THEN  DO 
+					say "Tx 256-511B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0004" THEN  DO 
+					say "Tx 512-1023B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0005" THEN  DO 
+					say "Tx >1024B Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0008" THEN  DO 
+					say "Tx Single Collision: "data ;ZocSend "^M"
+				END
+				WHEN j == "0009" THEN  DO 
+					say "Tx Multiple Collision: "data ;ZocSend "^M"
+				END
+				WHEN j == "000A" THEN  DO 
+					say "Tx Late Collision: "data ;ZocSend "^M"
+				END
+				WHEN j == "000B" THEN  DO 
+					say "Tx Excessive Collision: "data ;ZocSend "^M"
+				END
+				WHEN j == "000D" THEN  DO 
+					say "Tx Pause Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "0010" THEN  DO 
+					say "Tx Dropped Frame: "data ;ZocSend "^M"
+				END
+				WHEN j == "000E" THEN  DO 
+					say "Tx Good Byte(Low): "data ;ZocSend "^M"
+				END
+				WHEN j == "000F" THEN  DO 
+					say "Tx Good Byte(High): "data ;ZocSend "^M"
+				END
+				OTHERWISE 
+					NOP;
+				END		
+			END
+		return 1;
+			
+	END	
+	
+	
+		
+	/* ---------------------------------------------------------*/
+	/* UsageT10:          etc_cli(EN_GPHY_UART,PHY)     	    */   
+	/* ---------------------------------------------------------*/
+	/* Check for different GPHY addr */
+	
+	WHEN ARG(1)=="EN_GPHY_UART" THEN DO 
+		
+			/* GPIO configuration : GPIO2_DIR[6] ='1' ;GPIO2_ALTSEL_0[6]='0' and GPIO2_ALTSEL_1[6]='1'  */
+			/* GPIO configuration : GPIO2_DIR[7] ='1' ;GPIO2_ALTSEL_0[7]='0' and GPIO2_ALTSEL_1[7]='1'  */
+			
+			ZocSend "w F392 00C0^M"
+			ZocSend "w F393 0000^M"
+			ZocSend "w F394 00C0^M"
+			__phy__=ARG(2)													
+			a=etc_cli(MMD_DATAWRITE,__phy__,0EAC,0010); CALL ZocWait PROMPT
+			say " GPHY ="__phy__ || "is enabled !! "
+			return 1;
+	END
+		
+		
+	/* ---------------------------------------------------------*/
+	/* UsageT11:       etc_cli(DEBUG_REG,start_reg,end_reg)     */   		
+	/* ---------------------------------------------------------*/
+	/* To dump the registers of ETC/GPHY */
+	
+	WHEN ARG(1)=="DEBUG_REG" THEN DO 
+			start_reg=x2d(ARG(2))
+			end_reg=x2d(ARG(3))
+			DO  i= start_reg to end_reg by 4  
+				xx=etc_cli(REGGET,d2x(i))  
+				If i==end_reg THEN LEAVE
+				ELSE
+				  say "Read value of REG->"|| d2x(i) " = "xx; ZocSend "^M"
+				
+			END
+		EXIT	
+	
+	END
+		
+	/* ---------------------------------------------------------*/
+	/*  UsageT12:      etc_cli(RMON_READ_ALL_PORTS)             */   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="RMON_READ_ALL_PORTS" THEN DO 
+			
+			aa=etc_cli(RMON_READ,0)
+			bb=etc_cli(RMON_READ,1)
+			cc=etc_cli(RMON_READ,2)
+			dd=etc_cli(RMON_READ,3)
+			ee=etc_cli(RMON_READ,4)
+			ff=etc_cli(RMON_READ,5)
+			gg=etc_cli(RMON_READ,6)
+			
+		
+	END
+		
+		
+
+	/* ---------------------------------------------------------*/
+	/*  UsageT13:      etc_cli(RMON_EN)				            */   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="RMON_EN" THEN DO 
+		
+			say "Enable RMON, ETC_BM_PORT_PDI_[0/1/2/3/4] BM_PCFG"
+			ZocSend "w E080 0001^M";  --- # Enable RMON counters P0
+			ZocWait PROMPT
+			ZocSend "w E082 0001^M";  --- # Enable RMON counters P1
+			ZocWait PROMPT
+			ZocSend "w E084 0001^M";  --- # Enable RMON counters P2
+			ZocWait PROMPT
+			ZocSend "w E086 0001^M";  --- # Enable RMON counters P3
+			ZocWait PROMPT
+			ZocSend "w E088 0001^M";  --- # Enable RMON counters P4
+			ZocWait PROMPT
+		return 1;
+		
+	END
+		
+	
+		
+
+	/* ---------------------------------------------------------*/
+	/*  UsageT14:    etc_cli(LINK_SPEED,PHY)            	    */
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="LINK_SPEED" THEN DO 
+		
+			link=substr(STRIP(TRANSLATE(etc_cli(MDIO_REGGET,ARG(2),18)),4,1))   					---- offset 4, extract 1 nibble 
+			dec_link = x2d(link)
+			
+			SELECT 
+				WHEN dec_link == 0  THEN ret= "DPX=Half EEE=0 SPEED=10BT"
+				WHEN dec_link == 1  THEN ret= "DPX=Half EEE=0 SPEED=100BT" 
+				WHEN dec_link == 2  THEN ret= "DPX=Half EEE=0 SPEED=1000BT" 
+				WHEN dec_link == 3  THEN ret= "DPX=Half EEE=0 SPEED=?"                    
+				WHEN dec_link == 4  THEN ret= "DPX=Half EEE=1 SPEED=0"  
+				WHEN dec_link == 5  THEN ret= "DPX=Half EEE=1 SPEED=100BT"  
+				WHEN dec_link == 6  THEN ret= "DPX=Half EEE=1 SPEED=1000BT" 
+				WHEN dec_link == 7  THEN ret= "DPX=Half EEE=1 SPEED=?"
+				WHEN dec_link == 8  THEN ret= "DPX=Full EEE=0 SPEED=10BT"   
+				WHEN dec_link == 9  THEN ret= "DPX=Full EEE=0 SPEED=100BT"  
+				WHEN dec_link == 10 THEN ret= "DPX=Full EEE=0 SPEED=1000BT"    
+				WHEN dec_link == 11 THEN ret= "DPX=Full EEE=0 SPEED=?"
+				WHEN dec_link == 12 THEN ret= "DPX=Full EEE=1 SPEED=10BT"  
+				WHEN dec_link == 13 THEN ret= "DPX=Full EEE=1 SPEED=100BT" 
+				WHEN dec_link == 14 THEN ret= "DPX=Full EEE=1 SPEED=1000BT"
+				WHEN dec_link == 15 THEN ret= "DPX=Full EEE=1 SPEED=?"
+			
+				OTHERWISE
+				
+				ret= "LINK SPEED ERROR"
+			END
+	END 
+	
+	/* ---------------------------------------------------------*/
+	/*  UsageT15:       etc_cli(LINK_STATUS,PHY)            	*/
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)="LINK_STATUS" THEN DO
+            phy=ARG(2);
+            lsstr.0='LinkDown';
+            lsstr.1='LinkUp'; 
+            ls=substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,1))),3,1);
+            lspstr.0='TBT';
+            lspstr.1='FE';
+            lspstr.2='GE';
+            lspstr.3='??';
+            errsel.0='RXERR';
+            errsel.1='RXACT';
+            errsel.2='ESDERR';
+            errsel.3='SSDERR';
+            errsel.4='TXERR';
+            errsel.5='TXACT';
+            errsel.6='COL';
+            errsel.7='NA';
+            errsel.8='NLD';
+            errsel.9='NALDS';
+
+            lsp=b2x(reverse(substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,18))),1,2)));
+            snr=x2d(b2x(reverse(substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,10))),5,4))));
+            freq=x2d(b2x(reverse(substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,10))),9,8))),2);
+            nld=x2d(b2x(reverse(substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,15))),1,8))));
+            err=x2d(b2x(reverse(substr(reverse(x2b(etc_cli(MDIO_DATAREAD,phy,15))),9,4))));
+            say 'PHY'||phy||' : '||lsstr.ls||' : '||lspstr.lsp||' : '||snr||'DB : '||freq||'ppm :'||errsel.err||" "||nld||'^M';
+            return lsstr.ls||","||lspstr.lsp||","||snr||","||freq||","||nld||","||errsel.err;
+	END 
+	/* ---------------------------------------------------------*/
+	/*  UsageT16:       etc_cli(SWITCH_INIT_RGMII_PORTS)	   	*/
+	/* ---------------------------------------------------------*/
+	
+	WHEN ARG(1)=="SWITCH_INIT_RGMII_PORTS" THEN DO 
+	
+			/* GSWIP Enable */
+			ZocSend "w F400 8000 ^M"; CALL ZocWait PROMPT
+			
+			/* Enable the unknown unicast for port 5 and port6 */
+			ZocSend "w E455 0030 ^M"; CALL ZocWait PROMPT
+			
+			
+			/* Disable Auto-polling for all ports */
+			etc_cli(AUTO_POLL_ON_OFF,0)
+			
+			/* XMII config RGMII Reset and clear */
+			ZocSend "w F100 A044 ^M"; CALL ZocWait PROMPT	
+			ZocSend "w F10A A044 ^M"; CALL ZocWait PROMPT	
+			ZocDelay 0.2 
+			ZocSend "w F100 4044 ^M"; CALL ZocWait PROMPT	
+			ZocSend "w F10A 4044 ^M"; CALL ZocWait PROMPT	
+			
+		
+			/* Select PHY address of XMII interface port 5 */
+			ZocSend "w F410 3205 ^M"; CALL ZocWait PROMPT
+			/* Select PHY address of XMII interface port 6*/
+			ZocSend "w F40F 3206 ^M"; CALL ZocWait PROMPT
+			
+			/* Set the MAC_CTRL_0 register for ports 5 and 6 */
+			ZocSend "w E93F 00c6 ^M"; CALL ZocWait PROMPT
+			ZocSend "w E94B 00c6 ^M"; CALL ZocWait PROMPT
+		
+			Say " Switch initialization  for RGMII ports 5 and 6  done !!^M"
+		return 1;
+	END 		
+	/* ---------------------------------------------------------*/
+	/* UsageT17:        etc_cli(AUTO_POLL_ON_OFF,switch)	    */   
+	/* ---------------------------------------------------------*/
+	WHEN ARG(1)=="AUTO_POLL_ON_OFF" THEN DO 
+			switch=ARG(2)
+			IF switch=='1' THEN DO
+				
+				--say " Autopolling enabled on PHY ports"
+				ZocSend "w F40B 003F ^M" ;CALL ZocWait PROMPT 
+			return 1;	
+			END	
+			IF switch=='0' THEN DO  
+				--say " Autopolling disabled on PHY ports"
+				ZocSend "w F40B 0000^M" ;CALL ZocWait PROMPT	
+			return 0;
+			END	
+			ELSE
+                say " Autopolling status undefined"
+				
+	END
+	OTHERWISE
+				
+	NOP;
+	
+	
+END	
+	
+
+
